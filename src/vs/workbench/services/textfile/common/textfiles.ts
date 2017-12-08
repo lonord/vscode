@@ -8,7 +8,7 @@ import { TPromise } from 'vs/base/common/winjs.base';
 import URI from 'vs/base/common/uri';
 import Event from 'vs/base/common/event';
 import { IDisposable } from 'vs/base/common/lifecycle';
-import { IEncodingSupport, ConfirmResult } from 'vs/workbench/common/editor';
+import { IEncodingSupport, ConfirmResult, IRevertOptions } from 'vs/workbench/common/editor';
 import { IBaseStat, IResolveContentOptions } from 'vs/platform/files/common/files';
 import { createDecorator } from 'vs/platform/instantiation/common/instantiation';
 import { ITextEditorModel } from 'vs/editor/common/services/resolverService';
@@ -208,19 +208,6 @@ export interface ITextFileEditorModel extends ITextEditorModel, IEncodingSupport
 	isResolved(): boolean;
 
 	isDisposed(): boolean;
-}
-
-export interface IRevertOptions {
-
-	/**
-	 *  Forces to load the contents from disk again even if the file is not dirty.
-	 */
-	force?: boolean;
-
-	/**
-	 * A soft revert will clear dirty state of a file but not attempt to load the contents from disk.
-	 */
-	soft?: boolean;
 }
 
 export interface ITextFileService extends IDisposable {

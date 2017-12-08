@@ -11,7 +11,7 @@ import paths = require('vs/base/common/paths');
 import resources = require('vs/base/common/resources');
 import labels = require('vs/base/common/labels');
 import URI from 'vs/base/common/uri';
-import { EncodingMode, ConfirmResult, EditorInput, IFileEditorInput, ITextEditorModel } from 'vs/workbench/common/editor';
+import { EncodingMode, ConfirmResult, EditorInput, IFileEditorInput, ITextEditorModel, IRevertOptions } from 'vs/workbench/common/editor';
 import { TextFileEditorModel } from 'vs/workbench/services/textfile/common/textFileEditorModel';
 import { BinaryEditorModel } from 'vs/workbench/common/editor/binaryEditorModel';
 import { FileOperationError, FileOperationResult } from 'vs/platform/files/common/files';
@@ -222,8 +222,8 @@ export class FileEditorInput extends EditorInput implements IFileEditorInput {
 		return this.textFileService.save(this.resource);
 	}
 
-	public revert(): TPromise<boolean> {
-		return this.textFileService.revert(this.resource);
+	public revert(options?: IRevertOptions): TPromise<boolean> {
+		return this.textFileService.revert(this.resource, options);
 	}
 
 	public getPreferredEditorId(candidates: string[]): string {

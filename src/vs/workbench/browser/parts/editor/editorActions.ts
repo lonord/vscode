@@ -22,6 +22,7 @@ import { IEditorGroupService, GroupArrangement } from 'vs/workbench/services/gro
 import { ICommandService } from 'vs/platform/commands/common/commands';
 import { ITextFileService } from 'vs/workbench/services/textfile/common/textfiles';
 import { IWindowsService } from 'vs/platform/windows/common/windows';
+import { always } from 'vs/base/common/async';
 
 export class SplitEditorAction extends Action {
 
@@ -585,9 +586,8 @@ export class RevertAndCloseEditorAction extends Action {
 			const input = activeEditor.input;
 			const position = activeEditor.position;
 
-			return activeEditor.input.revert().then(ok =>
-				this.editorService.closeEditor(position, input)
-			);
+			// Close the editor both in success and error case (revert can fail)
+			return always(activeEditor.input.revert(), () => this.editorService.closeEditor(position, input));
 		}
 
 		return TPromise.as(false);
