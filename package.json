@@ -1,7 +1,7 @@
 {
   "name": "code-oss-dev",
-  "version": "1.19.0",
-  "distro": "d1d69e8e6791a0c39876882efd16affeeadc3830",
+  "version": "1.20.0",
+  "distro": "3e04fd7a1141705f5e82fb1175edc03d0d4ddf9c",
   "author": {
     "name": "Microsoft Corporation"
   },
@@ -34,11 +34,11 @@
     "minimist": "1.2.0",
     "native-keymap": "1.2.5",
     "native-watchdog": "0.3.0",
-    "node-pty": "0.7.3",
+    "node-pty": "0.7.4",
     "nsfw": "1.0.16",
     "semver": "4.3.6",
     "spdlog": "0.3.7",
-    "v8-inspect-profiler": "^0.0.6",
+    "v8-inspect-profiler": "^0.0.7",
     "vscode-chokidar": "1.6.2",
     "vscode-debugprotocol": "1.25.0",
     "vscode-ripgrep": "^0.6.0-patch.0.5",
