@@ -12,6 +12,7 @@ import { BaseEditor } from 'vs/workbench/browser/parts/editor/baseEditor';
 import { IConstructorSignature0, IInstantiationService } from 'vs/platform/instantiation/common/instantiation';
 import { isArray } from 'vs/base/common/types';
 import URI from 'vs/base/common/uri';
+import { DataTransfers } from 'vs/base/browser/dnd';
 
 export interface IEditorDescriptor {
 	instantiate(instantiationService: IInstantiationService): BaseEditor;
@@ -201,8 +202,13 @@ Registry.add(Extensions.Editors, new EditorRegistry());
 
 export interface IDraggedResource {
 	resource: URI;
+	backupResource?: URI;
 	isExternal: boolean;
 }
+
+export const CodeBackupDataTransfers = {
+	BACKUP: 'CodeBackup'
+};
 
 export function extractResources(e: DragEvent, externalOnly?: boolean): IDraggedResource[] {
 	const resources: IDraggedResource[] = [];
@@ -210,10 +216,18 @@ export function extractResources(e: DragEvent, externalOnly?: boolean): IDragged
 
 		// Check for in-app DND
 		if (!externalOnly) {
-			const rawData = e.dataTransfer.getData('URL');
+			const rawData = e.dataTransfer.getData(DataTransfers.URL);
 			if (rawData) {
 				try {
-					resources.push({ resource: URI.parse(rawData), isExternal: false });
+					const data: IDraggedResource = { resource: URI.parse(rawData), isExternal: false };
+
+					// Check for associated backup data
+					const rawBackupData = e.dataTransfer.getData(CodeBackupDataTransfers.BACKUP);
+					if (rawBackupData) {
+						data.backupResource = URI.parse(rawBackupData);
+					}
+
+					resources.push(data);
 				} catch (error) {
 					// Invalid URI
 				}
