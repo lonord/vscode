@@ -29,7 +29,6 @@ import { TabsTitleControl } from 'vs/workbench/browser/parts/editor/tabsTitleCon
 import { TitleControl, ITitleAreaControl } from 'vs/workbench/browser/parts/editor/titleControl';
 import { NoTabsTitleControl } from 'vs/workbench/browser/parts/editor/noTabsTitleControl';
 import { IEditorStacksModel, IStacksModelChangeEvent, IEditorGroup, EditorOptions, TextEditorOptions, IEditorIdentifier } from 'vs/workbench/common/editor';
-import { extractResources } from 'vs/workbench/browser/editor';
 import { getCodeEditor } from 'vs/editor/browser/services/codeEditorService';
 import { IThemeService } from 'vs/platform/theme/common/themeService';
 import { editorBackground, contrastBorder, activeContrastBorder } from 'vs/platform/theme/common/colorRegistry';
@@ -1113,19 +1112,14 @@ export class EditorGroupsControl extends Themable implements IEditorGroupsContro
 
 			// Check for URI transfer
 			else {
-				const droppedResources = extractResources(e).filter(r => r.resource.scheme === 'file' || r.resource.scheme === 'untitled');
-				if (droppedResources.length) {
-					const dropHandler = $this.instantiationService.createInstance(EditorAreaDropHandler, droppedResources);
-					dropHandler.handleDrop(splitEditor ? freeGroup : position).then(handled => {
-						if (!handled) {
-							if (splitEditor && splitTo !== freeGroup) {
-								groupService.moveGroup(freeGroup, splitTo);
-							}
+				const dropHandler = $this.instantiationService.createInstance(EditorAreaDropHandler, e);
+				dropHandler.handleDrop(() => {
+					if (splitEditor && splitTo !== freeGroup) {
+						groupService.moveGroup(freeGroup, splitTo);
+					}
 
-							groupService.focusGroup(splitEditor ? splitTo : position);
-						}
-					}).done(null, errors.onUnexpectedError);
-				}
+					groupService.focusGroup(splitEditor ? splitTo : position);
+				}, splitEditor ? freeGroup : position);
 			}
 		}
 

@@ -5,7 +5,7 @@
 
 'use strict';
 
-import { IDraggedResource, IDraggedEditor } from 'vs/workbench/browser/editor';
+import { IDraggedResource, IDraggedEditor, extractResources } from 'vs/workbench/browser/editor';
 import { WORKSPACE_EXTENSION, IWorkspacesService } from 'vs/platform/workspaces/common/workspaces';
 import { extname } from 'vs/base/common/paths';
 import { IFileService } from 'vs/platform/files/common/files';
@@ -19,15 +19,17 @@ import { Schemas } from 'vs/base/common/network';
 import { IUntitledEditorService } from 'vs/workbench/services/untitled/common/untitledEditorService';
 import { IWorkbenchEditorService } from 'vs/workbench/services/editor/common/editorService';
 import { Position } from 'vs/platform/editor/common/editor';
+import { onUnexpectedError } from 'vs/base/common/errors';
 
 /**
  * Shared function across some editor components to handle drag & drop of external resources. E.g. of folders and workspace files
  * to open them in the window instead of the editor or to handle dirty editors being dropped between instances of Code.
  */
 export class EditorAreaDropHandler {
+	private resources: (IDraggedResource | IDraggedEditor)[];
 
 	constructor(
-		private resources: (IDraggedResource | IDraggedEditor)[],
+		event: DragEvent,
 		@IFileService private fileService: IFileService,
 		@IWindowsService private windowsService: IWindowsService,
 		@IWindowService private windowService: IWindowService,
@@ -38,12 +40,17 @@ export class EditorAreaDropHandler {
 		@IUntitledEditorService private untitledEditorService: IUntitledEditorService,
 		@IWorkbenchEditorService private editorService: IWorkbenchEditorService,
 	) {
+		this.resources = extractResources(event).filter(r => r.resource.scheme === Schemas.file || r.resource.scheme === Schemas.untitled);
 	}
 
-	public handleDrop(targetPosition: Position, targetIndex?: number): TPromise<boolean> {
+	public handleDrop(afterDrop: () => void, targetPosition: Position, targetIndex?: number): void {
+		if (!this.resources.length) {
+			return;
+		}
+
 		return this.doHandleDrop().then(isWorkspaceOpening => {
 			if (isWorkspaceOpening) {
-				return true; // return early if the drop operation resulted in this window changing to a workspace
+				return void 0; // return early if the drop operation resulted in this window changing to a workspace
 			}
 
 			// Add external ones to recently open list unless dropped resource is a workspace
@@ -66,8 +73,12 @@ export class EditorAreaDropHandler {
 						},
 						position: targetPosition
 					};
-				}))).then(() => false);
-		});
+				}))).then(() => {
+
+					// Finish with provided function
+					afterDrop();
+				});
+		}).done(null, onUnexpectedError);
 	}
 
 	private doHandleDrop(): TPromise<boolean> {

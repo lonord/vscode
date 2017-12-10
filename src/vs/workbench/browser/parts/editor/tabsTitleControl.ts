@@ -35,7 +35,7 @@ import { IQuickOpenService } from 'vs/platform/quickOpen/common/quickOpen';
 import { IDisposable, dispose, combinedDisposable } from 'vs/base/common/lifecycle';
 import { ScrollableElement } from 'vs/base/browser/ui/scrollbar/scrollableElement';
 import { ScrollbarVisibility } from 'vs/base/common/scrollable';
-import { extractResources, CodeDataTransfers, ISerializedDraggedEditor } from 'vs/workbench/browser/editor';
+import { CodeDataTransfers, ISerializedDraggedEditor } from 'vs/workbench/browser/editor';
 import { getOrSet } from 'vs/base/common/map';
 import { ServiceCollection } from 'vs/platform/instantiation/common/serviceCollection';
 import { IThemeService, registerThemingParticipant, ITheme, ICssStyleCollector } from 'vs/platform/theme/common/themeService';
@@ -882,21 +882,8 @@ export class TabsTitleControl extends TitleControl {
 
 		// External DND
 		else {
-			this.handleExternalDrop(e, targetPosition, targetIndex);
-		}
-	}
-
-	private handleExternalDrop(e: DragEvent, targetPosition: Position, targetIndex: number): void {
-		const droppedResources = extractResources(e).filter(r => r.resource.scheme === 'file' || r.resource.scheme === 'untitled');
-		if (droppedResources.length) {
-			DOM.EventHelper.stop(e, true);
-
-			const dropHandler = this.instantiationService.createInstance(EditorAreaDropHandler, droppedResources);
-			dropHandler.handleDrop(targetPosition, targetIndex).then(handled => {
-				if (!handled) {
-					this.editorGroupService.focusGroup(targetPosition);
-				}
-			}).done(null, errors.onUnexpectedError);
+			const dropHandler = this.instantiationService.createInstance(EditorAreaDropHandler, e);
+			dropHandler.handleDrop(() => this.editorGroupService.focusGroup(targetPosition), targetPosition, targetIndex);
 		}
 	}
 
