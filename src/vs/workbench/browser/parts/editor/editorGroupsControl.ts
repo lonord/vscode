@@ -30,7 +30,6 @@ import { TitleControl, ITitleAreaControl } from 'vs/workbench/browser/parts/edit
 import { NoTabsTitleControl } from 'vs/workbench/browser/parts/editor/noTabsTitleControl';
 import { IEditorStacksModel, IStacksModelChangeEvent, IEditorGroup, EditorOptions, TextEditorOptions, IEditorIdentifier } from 'vs/workbench/common/editor';
 import { extractResources } from 'vs/workbench/browser/editor';
-import { IWindowService } from 'vs/platform/windows/common/windows';
 import { getCodeEditor } from 'vs/editor/browser/services/codeEditorService';
 import { IThemeService } from 'vs/platform/theme/common/themeService';
 import { editorBackground, contrastBorder, activeContrastBorder } from 'vs/platform/theme/common/colorRegistry';
@@ -146,7 +145,6 @@ export class EditorGroupsControl extends Themable implements IEditorGroupsContro
 		@IContextKeyService private contextKeyService: IContextKeyService,
 		@IExtensionService private extensionService: IExtensionService,
 		@IInstantiationService private instantiationService: IInstantiationService,
-		@IWindowService private windowService: IWindowService,
 		@IThemeService themeService: IThemeService
 	) {
 		super(themeService);
@@ -1118,27 +1116,15 @@ export class EditorGroupsControl extends Themable implements IEditorGroupsContro
 				const droppedResources = extractResources(e).filter(r => r.resource.scheme === 'file' || r.resource.scheme === 'untitled');
 				if (droppedResources.length) {
 					const dropHandler = $this.instantiationService.createInstance(EditorAreaDropHandler, droppedResources);
-					dropHandler.handleDrop().then(handled => {
-						if (handled) {
-							return;
+					dropHandler.handleDrop(splitEditor ? freeGroup : position).then(handled => {
+						if (!handled) {
+							if (splitEditor && splitTo !== freeGroup) {
+								groupService.moveGroup(freeGroup, splitTo);
+							}
+
+							groupService.focusGroup(splitEditor ? splitTo : position);
 						}
-
-						// Open in Editor
-						$this.windowService.focusWindow()
-							.then(() => editorService.openEditors(droppedResources.map(d => {
-								return {
-									input: { resource: d.resource, options: { pinned: true } },
-									position: splitEditor ? freeGroup : position
-								};
-							}))).then(() => {
-								if (splitEditor && splitTo !== freeGroup) {
-									groupService.moveGroup(freeGroup, splitTo);
-								}
-
-								groupService.focusGroup(splitEditor ? splitTo : position);
-							})
-							.done(null, errors.onUnexpectedError);
-					});
+					}).done(null, errors.onUnexpectedError);
 				}
 			}
 		}

@@ -30,13 +30,12 @@ import { IInstantiationService } from 'vs/platform/instantiation/common/instanti
 import { IKeybindingService } from 'vs/platform/keybinding/common/keybinding';
 import { IContextKeyService } from 'vs/platform/contextkey/common/contextkey';
 import { IMenuService } from 'vs/platform/actions/common/actions';
-import { IWindowService } from 'vs/platform/windows/common/windows';
 import { TitleControl } from 'vs/workbench/browser/parts/editor/titleControl';
 import { IQuickOpenService } from 'vs/platform/quickOpen/common/quickOpen';
 import { IDisposable, dispose, combinedDisposable } from 'vs/base/common/lifecycle';
 import { ScrollableElement } from 'vs/base/browser/ui/scrollbar/scrollableElement';
 import { ScrollbarVisibility } from 'vs/base/common/scrollable';
-import { extractResources, CodeBackupDataTransfers } from 'vs/workbench/browser/editor';
+import { extractResources, CodeDataTransfers, ISerializedDraggedEditor } from 'vs/workbench/browser/editor';
 import { getOrSet } from 'vs/base/common/map';
 import { ServiceCollection } from 'vs/platform/instantiation/common/serviceCollection';
 import { IThemeService, registerThemingParticipant, ITheme, ICssStyleCollector } from 'vs/platform/theme/common/themeService';
@@ -48,6 +47,7 @@ import { IBackupFileService } from 'vs/workbench/services/backup/common/backup';
 import { ITextFileService } from 'vs/workbench/services/textfile/common/textfiles';
 import { DataTransfers } from 'vs/base/browser/dnd';
 import { EditorAreaDropHandler } from 'vs/workbench/browser/parts/editor/editorAreaDropHandler';
+import { BaseTextEditor } from 'vs/workbench/browser/parts/editor/textEditor';
 
 interface IEditorInputLabel {
 	name: string;
@@ -80,7 +80,6 @@ export class TabsTitleControl extends TitleControl {
 		@IMessageService messageService: IMessageService,
 		@IMenuService menuService: IMenuService,
 		@IQuickOpenService quickOpenService: IQuickOpenService,
-		@IWindowService private windowService: IWindowService,
 		@IThemeService themeService: IThemeService,
 		@ITextFileService private textFileService: ITextFileService,
 		@IBackupFileService private backupFileService: IBackupFileService
@@ -765,20 +764,21 @@ export class TabsTitleControl extends TitleControl {
 			if (resource) {
 				const resourceStr = resource.toString();
 
-				e.dataTransfer.setData(DataTransfers.URL, resourceStr); // enables cross window DND of tabs
 				e.dataTransfer.setData(DataTransfers.TEXT, getPathLabel(resource)); // enables dropping tab resource path into text controls
-
-				// If this resource is dirty, also add its content (via backup resource) to transfer
-				if (this.textFileService.isDirty(resource)) {
-					const backupResource = this.backupFileService.toBackupResource(resource);
-					if (backupResource) {
-						e.dataTransfer.setData(CodeBackupDataTransfers.BACKUP, backupResource.toString());
-					}
-				}
 
 				if (resource.scheme === 'file') {
 					e.dataTransfer.setData(DataTransfers.DOWNLOAD_URL, [MIME_BINARY, editor.getName(), resourceStr].join(':')); // enables support to drag a tab as file to desktop
 				}
+
+				// Prepare IDraggedEditor transfer
+				const activeEditor = this.editorService.getActiveEditor();
+				const draggedEditor: ISerializedDraggedEditor = {
+					resource: resource.toString(),
+					backupResource: this.textFileService.isDirty(resource) ? this.backupFileService.toBackupResource(resource).toString() : void 0,
+					viewState: activeEditor instanceof BaseTextEditor ? activeEditor.getControl().saveViewState() : void 0
+				};
+
+				e.dataTransfer.setData(CodeDataTransfers.EDITOR, JSON.stringify(draggedEditor)); // enables cross window DND of tabs into the editor area
 			}
 
 			// Fixes https://github.com/Microsoft/vscode/issues/18733
@@ -892,22 +892,11 @@ export class TabsTitleControl extends TitleControl {
 			DOM.EventHelper.stop(e, true);
 
 			const dropHandler = this.instantiationService.createInstance(EditorAreaDropHandler, droppedResources);
-			dropHandler.handleDrop().then(handled => {
-				if (handled) {
-					return;
+			dropHandler.handleDrop(targetPosition, targetIndex).then(handled => {
+				if (!handled) {
+					this.editorGroupService.focusGroup(targetPosition);
 				}
-
-				// Open in Editor
-				this.windowService.focusWindow()
-					.then(() => this.editorService.openEditors(droppedResources.map(d => {
-						return {
-							input: { resource: d.resource, options: { pinned: true, index: targetIndex } },
-							position: targetPosition
-						};
-					}))).then(() => {
-						this.editorGroupService.focusGroup(targetPosition);
-					}).done(null, errors.onUnexpectedError);
-			});
+			}).done(null, errors.onUnexpectedError);
 		}
 	}
 

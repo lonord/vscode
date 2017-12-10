@@ -5,7 +5,7 @@
 
 'use strict';
 
-import { IDraggedResource } from 'vs/workbench/browser/editor';
+import { IDraggedResource, IDraggedEditor } from 'vs/workbench/browser/editor';
 import { WORKSPACE_EXTENSION, IWorkspacesService } from 'vs/platform/workspaces/common/workspaces';
 import { extname } from 'vs/base/common/paths';
 import { IFileService } from 'vs/platform/files/common/files';
@@ -17,6 +17,8 @@ import { IEditorGroupService } from 'vs/workbench/services/group/common/groupSer
 import { TPromise } from 'vs/base/common/winjs.base';
 import { Schemas } from 'vs/base/common/network';
 import { IUntitledEditorService } from 'vs/workbench/services/untitled/common/untitledEditorService';
+import { IWorkbenchEditorService } from 'vs/workbench/services/editor/common/editorService';
+import { Position } from 'vs/platform/editor/common/editor';
 
 /**
  * Shared function across some editor components to handle drag & drop of external resources. E.g. of folders and workspace files
@@ -25,70 +27,86 @@ import { IUntitledEditorService } from 'vs/workbench/services/untitled/common/un
 export class EditorAreaDropHandler {
 
 	constructor(
-		private resources: IDraggedResource[],
+		private resources: (IDraggedResource | IDraggedEditor)[],
 		@IFileService private fileService: IFileService,
 		@IWindowsService private windowsService: IWindowsService,
 		@IWindowService private windowService: IWindowService,
 		@IWorkspacesService private workspacesService: IWorkspacesService,
 		@ITextFileService private textFileService: ITextFileService,
 		@IBackupFileService private backupFileService: IBackupFileService,
-		@IEditorGroupService private editorGroupService: IEditorGroupService,
-		@IUntitledEditorService private untitledEditorService: IUntitledEditorService
+		@IEditorGroupService private groupService: IEditorGroupService,
+		@IUntitledEditorService private untitledEditorService: IUntitledEditorService,
+		@IWorkbenchEditorService private editorService: IWorkbenchEditorService,
 	) {
 	}
 
-	public handleDrop(): TPromise<boolean /* handled */> {
+	public handleDrop(targetPosition: Position, targetIndex?: number): TPromise<boolean> {
 		return this.doHandleDrop().then(isWorkspaceOpening => {
-
-			// Add external ones to recently open list unless dropped resource is a workspace
-			if (!isWorkspaceOpening) {
-				const externalResources = this.resources.filter(d => d.isExternal).map(d => d.resource);
-				if (externalResources.length) {
-					this.windowsService.addRecentlyOpened(externalResources.map(resource => resource.fsPath));
-				}
+			if (isWorkspaceOpening) {
+				return true; // return early if the drop operation resulted in this window changing to a workspace
 			}
 
-			return isWorkspaceOpening;
+			// Add external ones to recently open list unless dropped resource is a workspace
+			const externalResources = this.resources.filter(d => d.isExternal).map(d => d.resource);
+			if (externalResources.length) {
+				this.windowsService.addRecentlyOpened(externalResources.map(resource => resource.fsPath));
+			}
+
+			// Open in Editor
+			return this.windowService.focusWindow()
+				.then(() => this.editorService.openEditors(this.resources.map(r => {
+					return {
+						input: {
+							resource: r.resource,
+							options: {
+								pinned: true,
+								index: targetIndex,
+								viewState: (r as IDraggedEditor).viewState
+							}
+						},
+						position: targetPosition
+					};
+				}))).then(() => false);
 		});
 	}
 
 	private doHandleDrop(): TPromise<boolean> {
 
 		// Check for dirty editor being dropped
-		if (this.resources.length === 1 && !this.resources[0].isExternal && this.resources[0].backupResource) {
+		if (this.resources.length === 1 && !this.resources[0].isExternal && (this.resources[0] as IDraggedEditor).backupResource) {
 			return this.handleDirtyEditorDrop();
 		}
 
-		// Check for external file drop operation from another program or the OS
+		// Check for workspace file being dropped
 		if (this.resources.some(r => r.isExternal)) {
-			return this.handleExternalDrop();
+			return this.handleWorkspaceFileDrop();
 		}
 
 		return TPromise.as(false);
 	}
 
 	private handleDirtyEditorDrop(): TPromise<boolean> {
-		const droppedDirtyResource = this.resources[0];
+		const droppedDirtyEditor = this.resources[0] as IDraggedEditor;
 
 		// Untitled: always ensure that we open a new untitled for each file we drop
-		if (droppedDirtyResource.resource.scheme === Schemas.untitled) {
-			droppedDirtyResource.resource = this.untitledEditorService.createOrGet().getResource();
+		if (droppedDirtyEditor.resource.scheme === Schemas.untitled) {
+			droppedDirtyEditor.resource = this.untitledEditorService.createOrGet().getResource();
 		}
 
 		// Return early if the resource is already dirty in target or opened already
-		if (this.textFileService.isDirty(droppedDirtyResource.resource) || this.editorGroupService.getStacksModel().isOpen(droppedDirtyResource.resource)) {
+		if (this.textFileService.isDirty(droppedDirtyEditor.resource) || this.groupService.getStacksModel().isOpen(droppedDirtyEditor.resource)) {
 			return TPromise.as(false);
 		}
 
 		// Resolve the contents of the dropped dirty resource from source
-		return this.textFileService.resolveTextContent(droppedDirtyResource.backupResource, BACKUP_FILE_RESOLVE_OPTIONS).then(content => {
+		return this.textFileService.resolveTextContent(droppedDirtyEditor.backupResource, BACKUP_FILE_RESOLVE_OPTIONS).then(content => {
 
 			// Set the contents of to the resource to the target
-			return this.backupFileService.backupResource(droppedDirtyResource.resource, this.backupFileService.parseBackupContent(content.value));
+			return this.backupFileService.backupResource(droppedDirtyEditor.resource, this.backupFileService.parseBackupContent(content.value));
 		}).then(() => false, () => false /* ignore any error */);
 	}
 
-	private handleExternalDrop(): TPromise<boolean> {
+	private handleWorkspaceFileDrop(): TPromise<boolean> {
 		const externalResources = this.resources.filter(d => d.isExternal).map(d => d.resource);
 
 		const externalWorkspaceResources: { workspaces: URI[], folders: URI[] } = {
